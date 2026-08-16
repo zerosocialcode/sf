@@ -15,7 +15,6 @@ class Color:
     RESET = '\033[0m'
 
 def format_value(key, value):
-    """Returns a tuple (icon, color, formatted_value) based on key content"""
     k_lower = str(key).lower()
     val_str = str(value)
     
@@ -43,64 +42,40 @@ def format_value(key, value):
     return "🔹", Color.RESET, val_str
 
 def print_category(category_name, category_icon, data_dict, is_last_category):
-    """Prints a whole branch of the tree"""
     if not data_dict:
         return
-
     branch_char = "└──" if is_last_category else "├──"
     print(f"{Color.BLUE}{branch_char}{Color.RESET} {category_icon} {Color.YELLOW}{category_name}{Color.RESET}")
-
     child_prefix = "    " if is_last_category else "│   "
-
     items = list(data_dict.items())
     for i, (key, value) in enumerate(items):
         is_last_item = (i == len(items) - 1)
         item_branch = "└──" if is_last_item else "├──"
-        
         icon, val_color, fmt_val = format_value(key, value)
-        
         display_key = str(key).replace('_', ' ').title()
-        
         print(f"{Color.BLUE}{child_prefix}{item_branch}{Color.RESET} {icon} {display_key}: {val_color}{fmt_val}{Color.RESET}")
 
 def extract_username_from_entry(entry):
-    """Extract username from credential entry for deduplication"""
     raw_data = entry.get('data', {})
-    
     if isinstance(raw_data, dict):
         for key in ['email', 'username', 'user', 'login', 'user_id']:
             if key in raw_data and raw_data[key]:
                 return str(raw_data[key]).strip().lower()
-    
     client_info = entry.get('client_info', {})
     if client_info and 'ip' in client_info:
         return client_info['ip']
-    
     return "unknown"
 
 def has_meaningful_credentials(entry):
-    """Check if entry contains meaningful credentials"""
     raw_data = entry.get('data', {})
-    
     if not isinstance(raw_data, dict):
         return False
     
-    has_username = False
-    for key in ['email', 'username', 'user', 'login']:
-        if key in raw_data and raw_data[key] and str(raw_data[key]).strip():
-            has_username = True
-            break
-    
-    has_password = False
-    for key in ['pass', 'password', 'encpass', 'passwd']:
-        if key in raw_data and raw_data[key] and str(raw_data[key]).strip():
-            has_password = True
-            break
-    
-    return has_username and has_password
+    has_user = any(k in raw_data and raw_data[k] and str(raw_data[k]).strip() for k in ['email', 'username', 'user', 'login'])
+    has_pass = any(k in raw_data and raw_data[k] and str(raw_data[k]).strip() for k in ['pass', 'password', 'encpass', 'passwd'])
+    return has_user and has_pass
 
 def display_single_credential(entry, filename=""):
-    """Display a single credential entry"""
     if filename:
         print(f"\n{Color.CYAN}📁 File: {filename}{Color.RESET}")
     
