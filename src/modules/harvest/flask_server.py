@@ -13,6 +13,10 @@ def launch_flask_server(site_root, main_file_rel, site_credentials_dir, port=808
     os.makedirs(site_credentials_dir, exist_ok=True)
 
     server_script = """
+import logging
+# === SUPPRESS FLASK'S VERBOSE ACCESS LOGS ===
+logging.getLogger('werkzeug').setLevel(logging.ERROR)
+
 from flask import Flask, request, send_file, send_from_directory, jsonify, abort, make_response
 import os, json, datetime, re
 
