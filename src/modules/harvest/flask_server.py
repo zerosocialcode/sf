@@ -87,7 +87,7 @@ def extract_username_from_data(data):
     return "unknown"
 
 def save_credentials(data, site, session_id):
-    site_dir = os.path.join(CREDS_DIR, site)
+    site_dir = CREDS_DIR  # <--- FIX: Use CREDS_DIR directly
     os.makedirs(site_dir, exist_ok=True)
     
     username = extract_username_from_data(data)
